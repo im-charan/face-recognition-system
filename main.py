@@ -2,13 +2,17 @@ import os.path
 import datetime
 import pickle
 
+import sys
 import tkinter as tk
 import cv2
 from PIL import Image, ImageTk
 import face_recognition
 
+sys.path.append(os.path.join(os.path.dirname(__file__), 'Silent-Face-Anti-Spoofing'))
+
 import util
 from test import test
+
 
 
 class App:
@@ -37,12 +41,21 @@ class App:
 
         self.log_path = './log.txt'
 
-    def add_webcam(self, label):
-        if 'cap' not in self.__dict__:
-            self.cap = cv2.VideoCapture(2)
+    # def add_webcam(self, label):
+    #     if 'cap' not in self.__dict__:
+    #         self.cap = cv2.VideoCapture(2)
 
+    #     self._label = label
+    #     self.process_webcam()
+
+    def add_webcam(self, label):
+        self.cap = cv2.VideoCapture(0)  # Use index 0 since it's the only available camera
+        if not self.cap.isOpened():
+            print("Error: Could not open webcam.")
+            return
         self._label = label
         self.process_webcam()
+
 
     def process_webcam(self):
         ret, frame = self.cap.read()
@@ -60,7 +73,7 @@ class App:
 
         label = test(
                 image=self.most_recent_capture_arr,
-                model_dir='/home/phillip/Desktop/todays_tutorial/27_face_recognition_spoofing/code/face-attendance-system/Silent-Face-Anti-Spoofing/resources/anti_spoof_models',
+                model_dir='./Silent-Face-Anti-Spoofing/resources/anti_spoof_models',
                 device_id=0
                 )
 
@@ -83,7 +96,7 @@ class App:
 
         label = test(
                 image=self.most_recent_capture_arr,
-                model_dir='/home/phillip/Desktop/todays_tutorial/27_face_recognition_spoofing/code/face-attendance-system/Silent-Face-Anti-Spoofing/resources/anti_spoof_models',
+                model_dir='./face-attendance-system/Silent-Face-Anti-Spoofing/resources/anti_spoof_models',
                 device_id=0
                 )
 
@@ -104,6 +117,7 @@ class App:
 
 
     def register_new_user(self):
+        
         self.register_new_user_window = tk.Toplevel(self.main_window)
         self.register_new_user_window.geometry("1200x520+370+120")
 
@@ -124,6 +138,11 @@ class App:
         self.text_label_register_new_user = util.get_text_label(self.register_new_user_window, 'Please, \ninput username:')
         self.text_label_register_new_user.place(x=750, y=70)
 
+        print(self.register_new_user_capture.dtype)  # Should be 'uint8'
+        print(self.register_new_user_capture.shape) 
+
+        
+
     def try_again_register_new_user(self):
         self.register_new_user_window.destroy()
 
@@ -137,17 +156,48 @@ class App:
     def start(self):
         self.main_window.mainloop()
 
+    # def accept_register_new_user(self):
+    #     name = self.entry_text_register_new_user.get(1.0, "end-1c")
+
+    #     embeddings = face_recognition.face_encodings(self.register_new_user_capture)[0]
+
+    #     file = open(os.path.join(self.db_dir, '{}.pickle'.format(name)), 'wb')
+    #     pickle.dump(embeddings, file)
+
+    #     util.msg_box('Success!', 'User was registered successfully !')
+
+    #     self.register_new_user_window.destroy()
+
     def accept_register_new_user(self):
         name = self.entry_text_register_new_user.get(1.0, "end-1c")
 
-        embeddings = face_recognition.face_encodings(self.register_new_user_capture)[0]
+        # Ensure the image has exactly 3 channels (RGB)
+        if self.register_new_user_capture.shape[2] == 4:
+            bgr_image = cv2.cvtColor(self.register_new_user_capture, cv2.COLOR_BGRA2BGR)
+            rgb_image = cv2.cvtColor(self.register_new_user_capture, cv2.COLOR_BGR2RGB)
+        else:
+            rgb_image = cv2.cvtColor(self.register_new_user_capture, cv2.COLOR_BGR2RGB)
 
-        file = open(os.path.join(self.db_dir, '{}.pickle'.format(name)), 'wb')
-        pickle.dump(embeddings, file)
+        # Print image type and shape to confirm
+        print(f"Image dtype: {rgb_image.dtype}, shape: {rgb_image.shape}")
 
-        util.msg_box('Success!', 'User was registered successfully !')
+        # Check for face encodings
+        face_encodings = face_recognition.face_encodings(rgb_image)
 
+        if len(face_encodings) == 0:
+            util.msg_box('Error', 'No face detected. Please try again.')
+            return
+
+        embeddings = face_encodings[0]
+
+        file_path = os.path.join(self.db_dir, '{}.pickle'.format(name))
+        with open(file_path, 'wb') as file:
+            pickle.dump(embeddings, file)
+
+        util.msg_box('Success!', 'User was registered successfully!')
         self.register_new_user_window.destroy()
+
+
 
 
 if __name__ == "__main__":
